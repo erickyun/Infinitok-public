@@ -283,3 +283,16 @@
 "extra.enable_comment_repost.title" = "تفعيل إعادة نشر التعليقات";
 "extra.enable_comment_repost.detail" = "يفعّل ميزة إعادة نشر التعليق في TikTok. أعد تشغيل TikTok بعد التغيير.";
 "extra.hide_find_similar.detail" = "يزيل أزرار \"البحث عن مشابه\" / \"البحث بهذه الصورة\" وعلامات التسوق.";
+
+// CleanIdentity
+"section.clean_identity" = "إخفاء الهوية والموسيقى";
+"clean_identity.video_usernames.title" = "إخفاء أسماء مستخدمي الفيديو";
+"clean_identity.video_usernames.detail" = "إخفاء اسم صاحب الفيديو في الخلاصة.";
+"clean_identity.video_avatars.title" = "إخفاء صور حسابات الفيديو";
+"clean_identity.video_avatars.detail" = "إخفاء صور الحسابات في الخلاصة.";
+"clean_identity.music_disc.title" = "إخفاء قرص الموسيقى";
+"clean_identity.music_disc.detail" = "إخفاء قرص الموسيقى وواجهة الموسيقى.";
+"clean_identity.comment_usernames.title" = "إخفاء أسماء المعلقين";
+"clean_identity.comment_usernames.detail" = "إخفاء أسماء المعلقين والمنشئين والإشارات.";
+"clean_identity.comment_avatars.title" = "إخفاء صور المعلقين";
+"clean_identity.comment_avatars.detail" = "إخفاء صور المعلقين وشارات إعجاب المنشئ.";

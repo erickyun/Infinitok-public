@@ -976,6 +976,54 @@ static NSArray<InfinitokSettingsSection *> *InfinitokBuildSettingsSections(void)
         [sections addObject:section];
     }
 
+    {
+        InfinitokSettingsSection *section = [InfinitokSettingsSection new];
+        section.titleKey = @"section.clean_identity";
+        NSMutableArray<InfinitokSettingsRow *> *rows = [NSMutableArray array];
+        {
+            InfinitokSettingsRow *row = [InfinitokSettingsRow new];
+            row.type = InfinitokSettingsRowTypeSwitch;
+            row.defaultsKey = @"cleanidentity_hide_video_usernames";
+            row.titleKey = @"clean_identity.video_usernames.title";
+            row.detailKey = @"clean_identity.video_usernames.detail";
+            [rows addObject:row];
+        }
+        {
+            InfinitokSettingsRow *row = [InfinitokSettingsRow new];
+            row.type = InfinitokSettingsRowTypeSwitch;
+            row.defaultsKey = @"cleanidentity_hide_video_avatars";
+            row.titleKey = @"clean_identity.video_avatars.title";
+            row.detailKey = @"clean_identity.video_avatars.detail";
+            [rows addObject:row];
+        }
+        {
+            InfinitokSettingsRow *row = [InfinitokSettingsRow new];
+            row.type = InfinitokSettingsRowTypeSwitch;
+            row.defaultsKey = @"cleanidentity_hide_music_disc";
+            row.titleKey = @"clean_identity.music_disc.title";
+            row.detailKey = @"clean_identity.music_disc.detail";
+            [rows addObject:row];
+        }
+        {
+            InfinitokSettingsRow *row = [InfinitokSettingsRow new];
+            row.type = InfinitokSettingsRowTypeSwitch;
+            row.defaultsKey = @"cleanidentity_hide_comment_usernames";
+            row.titleKey = @"clean_identity.comment_usernames.title";
+            row.detailKey = @"clean_identity.comment_usernames.detail";
+            [rows addObject:row];
+        }
+        {
+            InfinitokSettingsRow *row = [InfinitokSettingsRow new];
+            row.type = InfinitokSettingsRowTypeSwitch;
+            row.defaultsKey = @"cleanidentity_hide_comment_avatars";
+            row.titleKey = @"clean_identity.comment_avatars.title";
+            row.detailKey = @"clean_identity.comment_avatars.detail";
+            [rows addObject:row];
+        }
+        section.rows = rows;
+        [sections addObject:section];
+    }
+
     return sections;
 }
 @interface ViewController () <UISearchResultsUpdating, UISearchControllerDelegate>

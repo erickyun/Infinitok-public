@@ -283,3 +283,16 @@
 "extra.enable_comment_repost.title" = "Yorum Yeniden Paylaşımlarını Etkinleştir";
 "extra.enable_comment_repost.detail" = "Yorumu yeniden paylaşma özelliğini açar. Sonra TikTok'u yeniden başlatın.";
 "extra.hide_find_similar.detail" = "Videolardaki \"Benzerini bul\" / \"Bu görseli ara\" butonlarını ve alışveriş etiketlerini kaldırır.";
+
+// CleanIdentity
+"section.clean_identity" = "Kimlik ve Müzik Gizleme";
+"clean_identity.video_usernames.title" = "Video kullanıcı adlarını gizle";
+"clean_identity.video_usernames.detail" = "Akıştaki video sahibinin adını gizler.";
+"clean_identity.video_avatars.title" = "Video profil resimlerini gizle";
+"clean_identity.video_avatars.detail" = "Akıştaki profil resimlerini gizler.";
+"clean_identity.music_disc.title" = "Müzik simgesini gizle";
+"clean_identity.music_disc.detail" = "Dönen müzik simgesini ve müzik görünümünü gizler.";
+"clean_identity.comment_usernames.title" = "Yorum kullanıcı adlarını gizle";
+"clean_identity.comment_usernames.detail" = "Yorum adlarını, içerik üreticisi adlarını ve @etiketleri gizler.";
+"clean_identity.comment_avatars.title" = "Yorum profil resimlerini gizle";
+"clean_identity.comment_avatars.detail" = "Yorum profil resimlerini ve içerik üreticisi beğeni rozetlerini gizler.";

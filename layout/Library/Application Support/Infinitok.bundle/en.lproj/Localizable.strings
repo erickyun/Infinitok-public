@@ -283,3 +283,16 @@
 "extra.enable_comment_repost.title" = "Enable comment reposts";
 "extra.enable_comment_repost.detail" = "Turns on TikTok's repost-a-comment feature. Restart TikTok after changing.";
 "extra.hide_find_similar.detail" = "Removes \"Find similar\" / \"Search this image\" buttons and shopping tags on videos and photos.";
+
+// CleanIdentity
+"section.clean_identity" = "Identity & Music";
+"clean_identity.video_usernames.title" = "Hide video usernames";
+"clean_identity.video_usernames.detail" = "Hide the author name on feed videos.";
+"clean_identity.video_avatars.title" = "Hide video avatars";
+"clean_identity.video_avatars.detail" = "Hide profile avatars on feed videos.";
+"clean_identity.music_disc.title" = "Hide music disc";
+"clean_identity.music_disc.detail" = "Hide the spinning music disc and music view.";
+"clean_identity.comment_usernames.title" = "Hide comment usernames";
+"clean_identity.comment_usernames.detail" = "Hide comment names, creator names and @mentions.";
+"clean_identity.comment_avatars.title" = "Hide comment avatars";
+"clean_identity.comment_avatars.detail" = "Hide comment avatars and creator-liked avatar badges.";

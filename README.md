@@ -52,3 +52,6 @@ English and Arabic.
 - `upload_to_filebin` — uploads the built `.ipa` to filebin.net.
 - `create_release` — publishes a GitHub Release with the download link.
 - `patch_sideload` — patches the `.ipa` with [ipapatch](https://github.com/asdfzxcvbn/ipapatch) (zxPluginsInject) for sideloading.
+
+## Identity & Music (CleanIdentity)
+Five independent switches under Infinitok Settings → Identity & Music (enabled by default): video usernames, video avatars, music disc, comment usernames (including @mentions and creator names), and comment avatars (including creator-liked badges). The port uses UI-only hooks from the standalone CleanIdentity branch; it does not import DouX login or network hooks. Recycled comment rows and view visibility are guarded by the existing CleanIdentity implementation. Restart TikTok after changing switches if an existing view does not refresh. Tested on-device compatibility is not implied.

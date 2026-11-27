@@ -20,6 +20,94 @@ static UIView *CleanIdentityViewForKey(id object, NSString *key) {
     }
 }
 
+// Global avatar policy. Match semantic avatar types/properties, never size alone.
+static char kCleanGlobalAvatarPropertyKey;
+static char kCleanGlobalAvatarOwnedKey;
+static char kCleanGlobalAvatarMutationKey;
+
+static BOOL CleanGlobalAvatarName(UIView *view) {
+    NSString *name = [NSStringFromClass([view class]) lowercaseString];
+    if (![name containsString:@"avatar"] && ![name containsString:@"userhead"] &&
+        ![name containsString:@"userportrait"] && ![name containsString:@"profilephoto"] &&
+        ![name containsString:@"profilepicture"] && ![name containsString:@"headimage"])
+        return NO;
+    // Never hide an entire list, screen, edit panel, or unrelated row.
+    for (NSString *part in @[@"cell", @"controller", @"table", @"collection", @"list",
+                             @"editor", @"picker", @"setting", @"searchresult", @"placeholderbutton"])
+        if ([name containsString:part]) return NO;
+    return [view isKindOfClass:[UIImageView class]] ||
+        [name hasSuffix:@"avatar"] || [name hasSuffix:@"head"] ||
+        [name hasSuffix:@"view"] || [name hasSuffix:@"image"] ||
+        [name hasSuffix:@"imageview"] || [name hasSuffix:@"button"] ||
+        [name hasSuffix:@"node"];
+}
+
+static BOOL CleanGlobalAvatarCandidate(UIView *view) {
+    if (!view || [view isKindOfClass:[UIWindow class]]) return NO;
+    if ([objc_getAssociatedObject(view, &kCleanGlobalAvatarPropertyKey) boolValue] ||
+        CleanGlobalAvatarName(view)) return YES;
+    return NO;
+}
+
+static void CleanGlobalAvatarApply(UIView *view) {
+    if (!view || objc_getAssociatedObject(view, &kCleanGlobalAvatarMutationKey)) return;
+    BOOL owned = [objc_getAssociatedObject(view, &kCleanGlobalAvatarOwnedKey) boolValue];
+    BOOL hide = [CleanIdentityPrefs hideAllAvatars] && CleanGlobalAvatarCandidate(view);
+    if (!hide && !owned) return;
+    objc_setAssociatedObject(view, &kCleanGlobalAvatarMutationKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (hide && !view.hidden) {
+        objc_setAssociatedObject(view, &kCleanGlobalAvatarOwnedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        view.hidden = YES;
+    } else if (!hide && owned) {
+        objc_setAssociatedObject(view, &kCleanGlobalAvatarOwnedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        view.hidden = NO;
+    }
+    objc_setAssociatedObject(view, &kCleanGlobalAvatarMutationKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+// Discover generic UIImageViews exposed through explicitly avatar-related getters.
+// Works without a dimension threshold and without scanning all circular images.
+static void CleanGlobalAvatarDiscover(UIView *owner) {
+    if (![CleanIdentityPrefs hideAllAvatars] || !owner) return;
+    NSString *className = NSStringFromClass([owner class]);
+    if ([className hasPrefix:@"UI"] || [className hasPrefix:@"_UI"]) return;
+    static NSArray<NSString *> *keys;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        keys = @[@"avatarView", @"avatarImageView", @"userAvatarView", @"userAvatarImageView",
+                 @"profileAvatarView", @"profileImageView", @"profilePhotoView", @"headImageView",
+                 @"headView", @"userHeadView", @"userHeadImageView", @"authorAvatarView",
+                 @"authorAvatarImageView", @"smallAvatarView", @"largeAvatarView",
+                 @"miniAvatarView", @"avatarBorderView", @"avatarButton", @"avatarContainerView",
+                 @"senderAvatarView", @"receiverAvatarView", @"friendAvatarView", @"coverAvatarView"];
+    });
+    for (NSString *key in keys) {
+        if (![owner respondsToSelector:NSSelectorFromString(key)]) continue;
+        UIView *target = CleanIdentityViewForKey(owner, key);
+        if (!target || target == owner || ![target isDescendantOfView:owner]) continue;
+        if ([target isKindOfClass:[UITableViewCell class]] || [target isKindOfClass:[UICollectionViewCell class]]) continue;
+        objc_setAssociatedObject(target, &kCleanGlobalAvatarPropertyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        CleanGlobalAvatarApply(target);
+    }
+}
+
+static void CleanGlobalAvatarWalk(UIView *view, NSUInteger depth, BOOL clear) {
+    if (!view || depth > 25) return;
+    if (clear) {
+        objc_setAssociatedObject(view, &kCleanGlobalAvatarPropertyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if ([objc_getAssociatedObject(view, &kCleanGlobalAvatarOwnedKey) boolValue]) {
+            objc_setAssociatedObject(view, &kCleanGlobalAvatarMutationKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(view, &kCleanGlobalAvatarOwnedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            view.hidden = NO;
+            objc_setAssociatedObject(view, &kCleanGlobalAvatarMutationKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    } else {
+        CleanGlobalAvatarDiscover(view);
+        CleanGlobalAvatarApply(view);
+    }
+    for (UIView *child in view.subviews) CleanGlobalAvatarWalk(child, depth + 1, clear);
+}
+
 // Restore only views that CleanIdentity itself hid. Do not reveal UI hidden by TikTok.
 static void CleanIdentitySetHidden(UIView *view, BOOL shouldHide) {
     if (!view) return;
@@ -406,6 +494,8 @@ static void CleanIdentityApplyCreatorHeader(UILabel *label) {
 }
 
 static void CleanIdentityApplyImageFallback(UIImageView *image) {
+    CleanGlobalAvatarApply(image);
+    if ([CleanIdentityPrefs hideAllAvatars] && CleanGlobalAvatarCandidate(image)) return;
     BOOL hideComment = [CleanIdentityPrefs hideCommentAvatars];
     BOOL hideFeed = [CleanIdentityPrefs hideVideoAvatars];
     BOOL hideNames = [CleanIdentityPrefs hideCommentUsernames];
@@ -910,7 +1000,23 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 // Privacy guard: only previously identified comment identity views are
 // forced to remain invisible. This does not alter comment models or requests.
 %hook UIView
+- (void)didMoveToWindow {
+    %orig;
+    if (self.window) {
+        CleanGlobalAvatarDiscover((UIView *)self);
+        CleanGlobalAvatarApply((UIView *)self);
+    }
+}
+- (void)layoutSubviews {
+    %orig;
+    CleanGlobalAvatarApply((UIView *)self);
+}
 - (void)setHidden:(BOOL)hidden {
+    if (!hidden && !objc_getAssociatedObject(self, &kCleanGlobalAvatarMutationKey) &&
+        [CleanIdentityPrefs hideAllAvatars] && CleanGlobalAvatarCandidate((UIView *)self)) {
+        objc_setAssociatedObject(self, &kCleanGlobalAvatarOwnedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        hidden = YES;
+    }
     if (!hidden) {
         BOOL name = [objc_getAssociatedObject(self, &kCleanCommentNameGuardKey) boolValue];
         BOOL avatar = [objc_getAssociatedObject(self, &kCleanCommentAvatarGuardKey) boolValue];
@@ -929,6 +1035,7 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)layoutSubviews {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
+    if ([CleanIdentityPrefs hideAllAvatars]) CleanGlobalAvatarWalk((UIView *)self, 0, NO);
 }
 - (void)didMoveToWindow {
     %orig;
@@ -936,6 +1043,7 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 }
 - (void)prepareForReuse {
     CleanIdentityClearCommentReuseTags((UIView *)self, 0);
+    CleanGlobalAvatarWalk((UIView *)self, 0, YES);
     %orig;
 }
 %end
@@ -944,6 +1052,7 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)layoutSubviews {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
+    if ([CleanIdentityPrefs hideAllAvatars]) CleanGlobalAvatarWalk((UIView *)self, 0, NO);
 }
 - (void)didMoveToWindow {
     %orig;
@@ -951,6 +1060,7 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 }
 - (void)prepareForReuse {
     CleanIdentityClearCommentReuseTags((UIView *)self, 0);
+    CleanGlobalAvatarWalk((UIView *)self, 0, YES);
     %orig;
 }
 %end
@@ -974,5 +1084,14 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)didMoveToWindow {
     %orig;
     CleanIdentityApplyImageFallback((UIImageView *)self);
+}
+%end
+
+// Profile headers and other screens whose custom views bypass UIView layout.
+%hook UIViewController
+- (void)viewWillAppear:(BOOL)animated {
+    %orig;
+    if ([CleanIdentityPrefs hideAllAvatars] && self.isViewLoaded)
+        CleanGlobalAvatarWalk(self.view, 0, NO);
 }
 %end

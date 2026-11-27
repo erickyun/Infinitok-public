@@ -991,9 +991,9 @@ static NSArray<InfinitokSettingsSection *> *InfinitokBuildSettingsSections(void)
         {
             InfinitokSettingsRow *row = [InfinitokSettingsRow new];
             row.type = InfinitokSettingsRowTypeSwitch;
-            row.defaultsKey = @"cleanidentity_hide_video_avatars";
-            row.titleKey = @"clean_identity.video_avatars.title";
-            row.detailKey = @"clean_identity.video_avatars.detail";
+            row.defaultsKey = @"cleanidentity_hide_all_avatars";
+            row.titleKey = @"clean_identity.all_avatars.title";
+            row.detailKey = @"clean_identity.all_avatars.detail";
             [rows addObject:row];
         }
         {
@@ -1010,14 +1010,6 @@ static NSArray<InfinitokSettingsSection *> *InfinitokBuildSettingsSections(void)
             row.defaultsKey = @"cleanidentity_hide_comment_usernames";
             row.titleKey = @"clean_identity.comment_usernames.title";
             row.detailKey = @"clean_identity.comment_usernames.detail";
-            [rows addObject:row];
-        }
-        {
-            InfinitokSettingsRow *row = [InfinitokSettingsRow new];
-            row.type = InfinitokSettingsRowTypeSwitch;
-            row.defaultsKey = @"cleanidentity_hide_comment_avatars";
-            row.titleKey = @"clean_identity.comment_avatars.title";
-            row.detailKey = @"clean_identity.comment_avatars.detail";
             [rows addObject:row];
         }
         section.rows = rows;

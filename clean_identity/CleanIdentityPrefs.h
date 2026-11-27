@@ -4,6 +4,7 @@
 // Standalone, default-ON settings. This header does not import or link DouX.
 @interface CleanIdentityPrefs : NSObject
 + (BOOL)hideCommentUsernames;
++ (BOOL)hideAllAvatars;
 + (BOOL)hideCommentAvatars;
 + (BOOL)hideVideoUsernames;
 + (BOOL)hideVideoAvatars;

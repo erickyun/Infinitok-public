@@ -1085,9 +1085,12 @@ static BOOL InfinitokSaveAllowedForView(UIView *v) {
     return YES;
 }
 
+extern void CleanIdentityRefreshGlobalAvatar(UIView *view);
+
 %hook BDImageView
 - (void)layoutSubviews {
     %orig;
+    CleanIdentityRefreshGlobalAvatar((UIView *)self);
     if ([BHIManager profileSave] || [BHIManager saveCommentMedia] || [BHIManager saveDMMedia]) {
         if (!InfinitokSaveAllowedForView(self)) return;
         [self addHandleLongPress];

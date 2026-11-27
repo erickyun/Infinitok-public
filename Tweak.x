@@ -1097,6 +1097,9 @@ extern void CleanIdentityRefreshGlobalAvatar(UIView *view);
     }
 }
 %new - (void)addHandleLongPress {
+    static char kInfinitokMediaLongPressKey;
+    if (objc_getAssociatedObject(self, &kInfinitokMediaLongPressKey)) return;
+    objc_setAssociatedObject(self, &kInfinitokMediaLongPressKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     UILongPressGestureRecognizer *longPress = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
     longPress.minimumPressDuration = 0.3;
 

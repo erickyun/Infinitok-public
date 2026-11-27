@@ -44,3 +44,6 @@
 
 @interface TUXLabel : UILabel
 @end
+
+@interface AWEIMMessageBaseCellView : UIView
+@end

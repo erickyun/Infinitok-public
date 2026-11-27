@@ -52,7 +52,7 @@ static NSString *CleanGlobalClass(id object) {
     return object ? [NSStringFromClass([object class]) lowercaseString] : @"";
 }
 static NSUInteger CleanGlobalContext(UIView *view) {
-    // search=1, profile=2, user/live row=4, editor=8
+    // search=1, profile=2, user/live row=4, editor=8, chat=16, shared card=32
     NSUInteger flags = 0;
     NSUInteger depth = 0;
     for (UIResponder *node = view; node && depth++ < 40; node = node.nextResponder) {
@@ -67,6 +67,12 @@ static NSUInteger CleanGlobalContext(UIView *view) {
                   @"liveroomcard", @"livecard", @"liveitem", @"liverank"])) flags |= 4;
         if (CleanGlobalHasAny(name, @[@"profileedit", @"editprofile", @"avatarpicker",
                   @"searchbar", @"searchinput", @"searchtextfield"])) flags |= 8;
+        if (CleanGlobalHasAny(name, @[@"aweim", @"ttkim", @"tiktokim", @"immessage",
+                  @"chatcell", @"chatmessage", @"conversation", @"messagelist", @"directmessage"])) flags |= 16;
+        if (CleanGlobalHasAny(name, @[@"shareaweme", @"awemeshare", @"sharevideo", @"videoshare",
+                  @"sharedvideo", @"sharecard", @"sharemessage", @"awememessage", @"video message",
+                  @"videomessage", @"linkpreview", @"linkcard", @"messagecard", @"sharecontent",
+                  @"awemecard", @"postcard", @"sharepost", @"sharelink"])) flags |= 32;
         if ([node isKindOfClass:[UIWindow class]]) break;
     }
     return flags;
@@ -111,6 +117,68 @@ static BOOL CleanGlobalSearchAvatar(UIView *view) {
     }
     return NO;
 }
+// Shared TikTok videos in DMs can draw the author's small portrait in an
+// otherwise generic image view or a leaf backed by CALayer. Keep the video
+// preview, sender's message, play button and sticker/media attachment intact.
+static BOOL CleanGlobalChatCardAvatar(UIView *view) {
+    if (!view.window || !view.superview) return NO;
+    NSUInteger context = CleanGlobalContext(view);
+    if (!(context & 16) || (context & 8)) return NO;
+    BOOL imageView = [view isKindOfClass:[UIImageView class]];
+    if (!imageView && (!view.layer.contents || view.subviews.count ||
+                       [view isKindOfClass:[UIControl class]] ||
+                       [view isKindOfClass:[UILabel class]])) return NO;
+    if (imageView) {
+        UIImage *image = ((UIImageView *)view).image;
+        if (image && (image.renderingMode == UIImageRenderingModeAlwaysTemplate ||
+                      image.isSymbolImage)) return NO;
+        if (!image && !view.layer.contents) return NO;
+    }
+
+    CGRect frame = [view convertRect:view.bounds toView:view.window];
+    CGFloat w = CGRectGetWidth(frame), h = CGRectGetHeight(frame);
+    if (w < 8 || h < 8 || w > 56 || h > 56 ||
+        fabs(w-h) > MAX(4.0, MIN(w,h)*0.20)) return NO;
+
+    BOOL round = NO;
+    for (UIView *p = view; p && p != view.window; p = p.superview) {
+        NSString *name = CleanGlobalClass(p);
+        if (CleanGlobalHasAny(name, @[@"emoji", @"sticker", @"reaction", @"playbutton",
+                     @"playicon", @"voicemessage", @"audioicon", @"statusicon",
+                     @"readreceipt", @"deliveryicon", @"videocover", @"thumbnail"])) return NO;
+        CGFloat pw = CGRectGetWidth(p.bounds), ph = CGRectGetHeight(p.bounds);
+        if (pw > w+16 || ph > h+16) break;
+        if (p.layer.cornerRadius >= MIN(w,h)*0.35 ||
+            (p.layer.mask && fabs(pw-ph) <= 5.0)) round = YES;
+    }
+    if (!round) return NO;
+    // Prefer a named shared-video/link card. Some releases use generic
+    // message cells instead: require the portrait to be tiny in a bubble
+    // that also contains a substantially larger image (the shared preview).
+    if (context & 32) return YES;
+    if (w > 42 || h > 42) return NO;
+    for (UIView *p = view.superview; p && p != view.window; p = p.superview) {
+        if ([p isKindOfClass:[UIScrollView class]]) break;
+        NSString *name = CleanGlobalClass(p);
+        if ([p isKindOfClass:[UITableViewCell class]] ||
+            [p isKindOfClass:[UICollectionViewCell class]] ||
+            CleanGlobalHasAny(name, @[@"messagebasecell", @"messagecell", @"messagebubble", @"chatcell"])) {
+            NSMutableArray<UIView *> *pending = [NSMutableArray arrayWithObject:p];
+            NSUInteger visited = 0;
+            while (pending.count && visited++ < 180) {
+                UIView *child = pending.lastObject;
+                [pending removeLastObject];
+                CGRect b = child.bounds;
+                if (child != view && CGRectGetWidth(b) >= 75 && CGRectGetHeight(b) >= 75 &&
+                    ([child isKindOfClass:[UIImageView class]] || child.layer.contents)) return YES;
+                [pending addObjectsFromArray:child.subviews];
+            }
+            break;
+        }
+    }
+    return NO;
+}
+
 static BOOL CleanGlobalIdentityText(UIView *view) {
     if (![view isKindOfClass:[UILabel class]] &&
         !([view isKindOfClass:[UITextView class]] && !((UITextView *)view).editable)) return NO;
@@ -134,7 +202,7 @@ static BOOL CleanGlobalAvatarCandidate(UIView *view) {
     if (!view || [view isKindOfClass:[UIWindow class]]) return NO;
     if ([objc_getAssociatedObject(view, &kCleanGlobalAvatarPropertyKey) boolValue] ||
         CleanGlobalAvatarName(view)) return YES;
-    return CleanGlobalSearchAvatar(view) || CleanGlobalIdentityText(view);
+    return CleanGlobalSearchAvatar(view) || CleanGlobalChatCardAvatar(view) || CleanGlobalIdentityText(view);
 }
 
 static void CleanGlobalAvatarApply(UIView *view) {
@@ -151,6 +219,13 @@ static void CleanGlobalAvatarApply(UIView *view) {
         view.hidden = NO;
     }
     objc_setAssociatedObject(view, &kCleanGlobalAvatarMutationKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+// Also invoked by the existing BDImageView hook in Tweak.x: some versions
+// bypass UIImageView's inherited layout implementation.
+void CleanIdentityRefreshGlobalAvatar(UIView *view) {
+    if (!view || !view.window) return;
+    CleanGlobalAvatarApply(view);
 }
 
 // Discover generic UIImageViews exposed through explicitly avatar-related getters.
@@ -171,7 +246,11 @@ static void CleanGlobalAvatarDiscover(UIView *owner) {
                  @"headImage", @"headImageButton", @"avatarIconView", @"avatarContentView",
                  @"avatarWrapperView", @"smallAvatarImageView", @"miniAvatarImageView",
                  @"liveAvatarView", @"liveUserAvatarView", @"anchorAvatarView", @"hostAvatarView",
-                 @"portraitView", @"userPortraitView", @"profilePictureView", @"userHeadImage"];
+                 @"portraitView", @"userPortraitView", @"profilePictureView", @"userHeadImage",
+                 @"creatorAvatarView", @"creatorAvatarImageView", @"creatorHeadView",
+                 @"shareAuthorAvatarView", @"shareUserAvatarView", @"sharedVideoAvatarView",
+                 @"videoAuthorAvatarView", @"cardAvatarView", @"cardAvatarImageView",
+                 @"authorHeadImageView", @"authorHeadView", @"userIconImageView"];
     });
     for (NSString *key in keys) {
         if (![owner respondsToSelector:NSSelectorFromString(key)]) continue;
@@ -1224,7 +1303,7 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
     if ([CleanIdentityPrefs hideAllAvatars] && self.window &&
-        (CleanGlobalContext((UIView *)self) & 3))
+        (CleanGlobalContext((UIView *)self) & 19))
         CleanGlobalAvatarWalk((UIView *)self, 0, NO);
 }
 - (void)prepareForReuse {
@@ -1244,7 +1323,7 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
     if ([CleanIdentityPrefs hideAllAvatars] && self.window &&
-        (CleanGlobalContext((UIView *)self) & 3))
+        (CleanGlobalContext((UIView *)self) & 19))
         CleanGlobalAvatarWalk((UIView *)self, 0, NO);
 }
 - (void)prepareForReuse {
@@ -1291,7 +1370,7 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
     if ([CleanIdentityPrefs hideAllAvatars] && self.isViewLoaded &&
-        (CleanGlobalContext(self.view) & 3))
+        (CleanGlobalContext(self.view) & 19))
         CleanGlobalAvatarWalk(self.view, 0, NO);
 }
 %end

@@ -33,7 +33,7 @@ static BOOL CleanGlobalAvatarName(UIView *view) {
         return NO;
     // Never hide an entire list, screen, edit panel, or unrelated row.
     for (NSString *part in @[@"cell", @"controller", @"table", @"collection", @"list",
-                             @"editor", @"picker", @"setting", @"searchresult", @"placeholderbutton"])
+                             @"editor", @"picker", @"setting", @"placeholderbutton"])
         if ([name containsString:part]) return NO;
     return [view isKindOfClass:[UIImageView class]] ||
         [name hasSuffix:@"avatar"] || [name hasSuffix:@"head"] ||
@@ -63,7 +63,8 @@ static NSUInteger CleanGlobalContext(UIView *view) {
                   @"profileotherviewcontroller", @"profilepageviewcontroller", @"userprofileviewcontroller"])) flags |= 2;
         if (CleanGlobalHasAny(name, @[@"searchuser", @"usersearch", @"searchaccount",
                   @"userresult", @"accountresult", @"searchlive", @"livesearch",
-                  @"popularlive", @"trendinglive", @"liveuser", @"liveauthor", @"liveanchor"])) flags |= 4;
+                  @"popularlive", @"trendinglive", @"liveuser", @"liveauthor", @"liveanchor",
+                  @"liveroomcard", @"livecard", @"liveitem", @"liverank"])) flags |= 4;
         if (CleanGlobalHasAny(name, @[@"profileedit", @"editprofile", @"avatarpicker",
                   @"searchbar", @"searchinput", @"searchtextfield"])) flags |= 8;
         if ([node isKindOfClass:[UIWindow class]]) break;
@@ -71,11 +72,18 @@ static NSUInteger CleanGlobalContext(UIView *view) {
     return flags;
 }
 static BOOL CleanGlobalSearchAvatar(UIView *view) {
-    if (![view isKindOfClass:[UIImageView class]] || !view.superview || !view.window) return NO;
+    if (!view.superview || !view.window) return NO;
+    BOOL imageView = [view isKindOfClass:[UIImageView class]];
+    if (!imageView && (!view.layer.contents || view.subviews.count > 0 ||
+                       [view isKindOfClass:[UIControl class]] ||
+                       [view isKindOfClass:[UILabel class]])) return NO;
     NSUInteger context = CleanGlobalContext(view);
     if (!(context & 1) || (context & 8)) return NO;
-    UIImageView *image = (UIImageView *)view;
-    if (!image.image || image.image.renderingMode == UIImageRenderingModeAlwaysTemplate) return NO;
+    if (imageView) {
+        UIImage *image = ((UIImageView *)view).image;
+        if (image.renderingMode == UIImageRenderingModeAlwaysTemplate) return NO;
+        if (!image && !view.layer.contents) return NO;
+    }
     CGRect frame = [view convertRect:view.bounds toView:view.window];
     CGFloat w = CGRectGetWidth(frame), h = CGRectGetHeight(frame);
     if (w < 10.0 || h < 10.0 || w > 100.0 || h > 100.0 ||
@@ -90,7 +98,18 @@ static BOOL CleanGlobalSearchAvatar(UIView *view) {
     if (!round) return NO;
     if (CleanGlobalHasAny(CleanGlobalClass(view), @[@"icon", @"emoji", @"sticker",
                        @"cover", @"thumbnail", @"badge", @"logo", @"button"])) return NO;
-    return (context & 4) || CGRectGetMinX(frame) < CGRectGetWidth(view.window.bounds)*0.30;
+    if ((context & 4) || CGRectGetMinX(frame) < CGRectGetWidth(view.window.bounds)*0.30) return YES;
+    // Popular LIVE portraits may sit over a card rather than at its leading edge.
+    if (w > 58.0 || h > 58.0) return NO;
+    for (UIView *p = view.superview; p && p != view.window; p = p.superview) {
+        NSString *name = CleanGlobalClass(p);
+        if ([p isKindOfClass:[UICollectionViewCell class]] ||
+            [p isKindOfClass:[UITableViewCell class]] ||
+            CleanGlobalHasAny(name, @[@"searchcard", @"searchitem", @"livecard", @"liveroom",
+                                      @"searchresult", @"searchsuggest"])) return YES;
+        if ([p isKindOfClass:[UIScrollView class]]) break;
+    }
+    return NO;
 }
 static BOOL CleanGlobalIdentityText(UIView *view) {
     if (![view isKindOfClass:[UILabel class]] &&
@@ -103,7 +122,8 @@ static BOOL CleanGlobalIdentityText(UIView *view) {
                   @"authorname", @"accountname", @"profilename", @"useridlabel"])) return YES;
         if ((context & 2) && CleanGlobalHasAny(name, @[@"profilebio", @"profilesignature",
                   @"profiledescription", @"userbio", @"usersignature", @"bioview",
-                  @"biocomponent", @"signaturecomponent", @"signaturelabel", @"biolabel"])) return YES;
+                  @"biocomponent", @"signaturecomponent", @"signaturelabel", @"biolabel",
+                  @"biotext", @"signaturetext", @"userdescription", @"personaldescription"])) return YES;
         if ([p isKindOfClass:[UITableViewCell class]] ||
             [p isKindOfClass:[UICollectionViewCell class]] || CGRectGetHeight(p.bounds)>170.0) break;
     }
@@ -174,7 +194,8 @@ static void CleanGlobalAvatarDiscover(UIView *owner) {
                      @"userIDLabel", @"nickNameView", @"nicknameView", @"userNameView", @"usernameView"];
         bioKeys = @[@"bioLabel", @"bioTextView", @"bioView", @"signatureLabel", @"signatureTextView",
                     @"signatureView", @"profileDescriptionLabel", @"profileDescriptionView",
-                    @"userDescriptionLabel", @"userBioLabel"];
+                    @"userDescriptionLabel", @"userBioLabel", @"bioTextLabel",
+                    @"signatureTextLabel", @"descriptionTextView", @"userSignatureLabel"];
     });
     NSMutableArray<NSString *> *textKeys = [nameKeys mutableCopy];
     if (context & 2) [textKeys addObjectsFromArray:bioKeys];
@@ -187,6 +208,68 @@ static void CleanGlobalAvatarDiscover(UIView *owner) {
             !CleanGlobalIdentityText(target)) continue;
         objc_setAssociatedObject(target, &kCleanGlobalAvatarPropertyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         CleanGlobalAvatarApply(target);
+    }
+}
+
+// A search row may use a plain label with no identity-specific class name.
+// Find the closest short label next to its positively identified avatar.
+static void CleanGlobalSearchCollect(UIView *view, NSMutableArray<UIView *> *avatars,
+                                     NSMutableArray<UILabel *> *labels, NSUInteger depth) {
+    if (!view || depth > 14) return;
+    if (CleanGlobalAvatarName(view) || CleanGlobalSearchAvatar(view)) {
+        CGRect b = view.bounds;
+        if (CGRectGetWidth(b) >= 10 && CGRectGetWidth(b) <= 112 &&
+            CGRectGetHeight(b) >= 10 && CGRectGetHeight(b) <= 112)
+            [avatars addObject:view];
+    }
+    if ([view isKindOfClass:[UILabel class]]) [labels addObject:(UILabel *)view];
+    for (UIView *child in view.subviews) CleanGlobalSearchCollect(child, avatars, labels, depth+1);
+}
+static BOOL CleanGlobalSearchNameLabel(UILabel *label) {
+    NSString *value = label.text ?: label.attributedText.string;
+    if (!value.length || value.length > 100 || label.numberOfLines > 1 ||
+        label.font.pointSize < 9 || label.font.pointSize > 24) return NO;
+    NSString *lower = [value lowercaseString];
+    if ([lower isEqualToString:@"live"] || [lower isEqualToString:@"follow"] ||
+        [lower isEqualToString:@"following"] || [lower isEqualToString:@"creator"] ||
+        [lower isEqualToString:@"canlı"] || [lower isEqualToString:@"takip et"] ||
+        CleanGlobalHasAny(lower, @[@"followers", @"following", @"viewers", @"takipçi", @"izleyici"])) return NO;
+    if ([value rangeOfCharacterFromSet:[NSCharacterSet letterCharacterSet]].location == NSNotFound)
+        return NO;
+    return !CleanGlobalHasAny(CleanGlobalClass(label), @[@"count", @"badge", @"status", @"time",
+                                                         @"button", @"metric", @"statistic"]);
+}
+static void CleanGlobalSearchNamesInRow(UIView *row) {
+    if (![CleanIdentityPrefs hideAllAvatars] || !row.window) return;
+    NSUInteger context = CleanGlobalContext(row);
+    if (!(context & 1) || (context & 8)) return;
+    // Only a compact result cell; never a search page, search bar, or whole list.
+    if (![row isKindOfClass:[UITableViewCell class]] &&
+        ![row isKindOfClass:[UICollectionViewCell class]]) return;
+    NSMutableArray<UIView *> *avatars = [NSMutableArray array];
+    NSMutableArray<UILabel *> *labels = [NSMutableArray array];
+    CleanGlobalSearchCollect(row, avatars, labels, 0);
+    for (UIView *avatar in avatars) {
+        CGRect a = [avatar convertRect:avatar.bounds toView:row];
+        UILabel *best = nil;
+        CGFloat bestScore = CGFLOAT_MAX;
+        for (UILabel *label in labels) {
+            if (!CleanGlobalSearchNameLabel(label)) continue;
+            CGRect l = [label convertRect:label.bounds toView:row];
+            CGFloat dx = CGRectGetMinX(l) - CGRectGetMaxX(a);
+            CGFloat dy = fabs(CGRectGetMidY(l)-CGRectGetMidY(a));
+            BOOL adjacent = dx >= -3 && dx <= 45 && dy <= MAX(20, CGRectGetHeight(a)*0.55);
+            CGFloat below = CGRectGetMinY(l)-CGRectGetMaxY(a);
+            BOOL vertical = (context & 4) && below >= -3 && below <= 25 &&
+                fabs(CGRectGetMidX(l)-CGRectGetMidX(a)) <= MAX(25, CGRectGetWidth(a)*0.65);
+            if (!adjacent && !vertical) continue;
+            CGFloat score = adjacent ? fabs(dx)+dy : fabs(below)+fabs(CGRectGetMidX(l)-CGRectGetMidX(a));
+            if (score < bestScore) { bestScore = score; best = label; }
+        }
+        if (best) {
+            objc_setAssociatedObject(best, &kCleanGlobalAvatarPropertyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            CleanGlobalAvatarApply(best);
+        }
     }
 }
 
@@ -205,6 +288,7 @@ static void CleanGlobalAvatarWalk(UIView *view, NSUInteger depth, BOOL clear) {
         CleanGlobalAvatarApply(view);
     }
     for (UIView *child in view.subviews) CleanGlobalAvatarWalk(child, depth + 1, clear);
+    if (!clear && depth == 0) CleanGlobalSearchNamesInRow(view);
 }
 
 // Restore only views that CleanIdentity itself hid. Do not reveal UI hidden by TikTok.
@@ -1139,6 +1223,9 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)didMoveToWindow {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
+    if ([CleanIdentityPrefs hideAllAvatars] && self.window &&
+        (CleanGlobalContext((UIView *)self) & 3))
+        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
 }
 - (void)prepareForReuse {
     CleanIdentityClearCommentReuseTags((UIView *)self, 0);
@@ -1156,6 +1243,9 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)didMoveToWindow {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
+    if ([CleanIdentityPrefs hideAllAvatars] && self.window &&
+        (CleanGlobalContext((UIView *)self) & 3))
+        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
 }
 - (void)prepareForReuse {
     CleanIdentityClearCommentReuseTags((UIView *)self, 0);
@@ -1176,6 +1266,11 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 %end
 
 %hook UIImageView
+- (void)setImage:(UIImage *)image {
+    %orig(image);
+    if ([CleanIdentityPrefs hideAllAvatars] && self.window)
+        CleanGlobalAvatarApply((UIView *)self);
+}
 - (void)layoutSubviews {
     %orig;
     CleanIdentityApplyImageFallback((UIImageView *)self);
@@ -1191,6 +1286,12 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)viewWillAppear:(BOOL)animated {
     %orig;
     if ([CleanIdentityPrefs hideAllAvatars] && self.isViewLoaded)
+        CleanGlobalAvatarWalk(self.view, 0, NO);
+}
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    if ([CleanIdentityPrefs hideAllAvatars] && self.isViewLoaded &&
+        (CleanGlobalContext(self.view) & 3))
         CleanGlobalAvatarWalk(self.view, 0, NO);
 }
 %end

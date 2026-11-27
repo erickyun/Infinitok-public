@@ -49,9 +49,16 @@ static BOOL CleanGlobalHasAny(NSString *name, NSArray<NSString *> *terms) {
     return NO;
 }
 static NSString *CleanGlobalClass(id object) {
-    return object ? [NSStringFromClass([object class]) lowercaseString] : @"";
+    if (!object) return @"";
+    Class cls = object_getClass(object);
+    static NSMapTable *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cache = [NSMapTable strongToStrongObjectsMapTable]; });
+    NSString *name = [cache objectForKey:cls];
+    if (!name) { name = [NSStringFromClass(cls) lowercaseString]; [cache setObject:name forKey:cls]; }
+    return name;
 }
-static NSUInteger CleanGlobalContext(UIView *view) {
+static NSUInteger CleanGlobalContextUncached(UIView *view) {
     // search=1, profile=2, user/live row=4, editor=8, chat=16, shared card=32
     NSUInteger flags = 0;
     NSUInteger depth = 0;
@@ -76,6 +83,19 @@ static NSUInteger CleanGlobalContext(UIView *view) {
                   @"awemecard", @"postcard", @"sharepost", @"sharelink"])) flags |= 32;
         if ([node isKindOfClass:[UIWindow class]]) break;
     }
+    return flags;
+}
+// Cache context briefly across repeated layout calls; invalidate on reparenting.
+static char kCleanContextCacheKey, kCleanContextTimeKey;
+static NSUInteger CleanGlobalContext(UIView *view) {
+    if (!view || !view.window) return CleanGlobalContextUncached(view);
+    CFTimeInterval now = CACurrentMediaTime();
+    NSNumber *stamp = objc_getAssociatedObject(view, &kCleanContextTimeKey);
+    if (stamp && now - stamp.doubleValue < 0.20)
+        return [objc_getAssociatedObject(view, &kCleanContextCacheKey) unsignedIntegerValue];
+    NSUInteger flags = CleanGlobalContextUncached(view);
+    objc_setAssociatedObject(view, &kCleanContextCacheKey, @(flags), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(view, &kCleanContextTimeKey, @(now), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return flags;
 }
 static BOOL CleanGlobalSearchAvatar(UIView *view) {
@@ -204,6 +224,12 @@ static BOOL CleanGlobalAvatarCandidate(UIView *view) {
     if (!view || [view isKindOfClass:[UIWindow class]]) return NO;
     if ([objc_getAssociatedObject(view, &kCleanGlobalAvatarPropertyKey) boolValue] ||
         CleanGlobalAvatarName(view)) return YES;
+    // Generic feed containers cannot be search/chat portraits or profile labels.
+    if (![view isKindOfClass:[UILabel class]] && ![view isKindOfClass:[UITextView class]]) {
+        CGFloat w = CGRectGetWidth(view.bounds), h = CGRectGetHeight(view.bounds);
+        if (w < 7 || h < 7 || w > 112 || h > 112 || fabs(w-h) > 22) return NO;
+        if (![view isKindOfClass:[UIImageView class]] && !view.layer.contents) return NO;
+    }
     return CleanGlobalSearchAvatar(view) || CleanGlobalChatCardAvatar(view) || CleanGlobalIdentityText(view);
 }
 
@@ -487,7 +513,7 @@ static void CleanGlobalAvatarWalk(UIView *view, NSUInteger depth, BOOL clear) {
     }
     for (UIView *child in view.subviews) CleanGlobalAvatarWalk(child, depth + 1, clear);
     if (!clear && depth == 0) CleanGlobalSearchNamesInRow(view);
-    if (!clear && CleanChatIsMessageRow(view) && (CleanGlobalContext(view) & 16))
+    if (!clear && (CleanGlobalContext(view) & 16) && CleanChatIsMessageRow(view))
         CleanChatMaskSharedCard(view);
 }
 
@@ -878,7 +904,8 @@ static void CleanIdentityApplyCreatorHeader(UILabel *label) {
 
 static void CleanIdentityApplyImageFallback(UIImageView *image) {
     CleanGlobalAvatarApply(image);
-    if ([CleanIdentityPrefs hideAllAvatars] && CleanGlobalAvatarCandidate(image)) return;
+    if ([CleanIdentityPrefs hideAllAvatars] &&
+        [objc_getAssociatedObject(image, &kCleanGlobalAvatarOwnedKey) boolValue]) return;
     BOOL hideComment = [CleanIdentityPrefs hideCommentAvatars];
     BOOL hideFeed = [CleanIdentityPrefs hideVideoAvatars];
     BOOL hideNames = [CleanIdentityPrefs hideCommentUsernames];
@@ -1383,6 +1410,10 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 // Privacy guard: only previously identified comment identity views are
 // forced to remain invisible. This does not alter comment models or requests.
 %hook UIView
+- (void)didMoveToSuperview {
+    %orig;
+    objc_setAssociatedObject(self, &kCleanContextTimeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
 - (void)didMoveToWindow {
     %orig;
     if (self.window) {
@@ -1418,7 +1449,8 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)layoutSubviews {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
-    if ([CleanIdentityPrefs hideAllAvatars]) CleanGlobalAvatarWalk((UIView *)self, 0, NO);
+    if ([CleanIdentityPrefs hideAllAvatars] && (CleanGlobalContext((UIView *)self) & 19))
+        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
 }
 - (void)didMoveToWindow {
     %orig;
@@ -1438,7 +1470,8 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)layoutSubviews {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
-    if ([CleanIdentityPrefs hideAllAvatars]) CleanGlobalAvatarWalk((UIView *)self, 0, NO);
+    if ([CleanIdentityPrefs hideAllAvatars] && (CleanGlobalContext((UIView *)self) & 19))
+        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
 }
 - (void)didMoveToWindow {
     %orig;

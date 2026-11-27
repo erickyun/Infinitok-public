@@ -288,8 +288,8 @@
 "section.clean_identity" = "Identity & Music";
 "clean_identity.video_usernames.title" = "Hide video usernames";
 "clean_identity.video_usernames.detail" = "Hide the author name on feed videos.";
-"clean_identity.all_avatars.title" = "Hide all avatars";
-"clean_identity.all_avatars.detail" = "Hide profile pictures of all sizes throughout TikTok, including search, profiles, inbox, feed, comments and creator-like badges.";
+"clean_identity.all_avatars.title" = "Hide all avatars & profile info";
+"clean_identity.all_avatars.detail" = "Hide all profile pictures, including small Search and Popular LIVE avatars, plus names in Search/profile pages and profile bios.";
 "clean_identity.music_disc.title" = "Hide music disc";
 "clean_identity.music_disc.detail" = "Hide the spinning music disc and music view.";
 "clean_identity.comment_usernames.title" = "Hide comment usernames";

@@ -1409,10 +1409,24 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 
 // Privacy guard: only previously identified comment identity views are
 // forced to remain invisible. This does not alter comment models or requests.
+// Reused feed cells need discovery even outside search/profile/chat.
+static char kCleanCellScanTimeKey;
+static void CleanGlobalRefreshReusableCell(UIView *cell, BOOL force) {
+    if (![CleanIdentityPrefs hideAllAvatars] || !cell.window) return;
+    CFTimeInterval now = CACurrentMediaTime();
+    NSNumber *last = objc_getAssociatedObject(cell, &kCleanCellScanTimeKey);
+    if (!force && last && now-last.doubleValue < 0.10) return;
+    objc_setAssociatedObject(cell, &kCleanCellScanTimeKey, @(now), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    CleanGlobalAvatarWalk(cell, 0, NO);
+}
 %hook UIView
 - (void)didMoveToSuperview {
     %orig;
     objc_setAssociatedObject(self, &kCleanContextTimeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (self.window && [CleanIdentityPrefs hideAllAvatars]) {
+        CleanGlobalAvatarDiscover((UIView *)self);
+        CleanGlobalAvatarApply((UIView *)self);
+    }
 }
 - (void)didMoveToWindow {
     %orig;
@@ -1449,19 +1463,17 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)layoutSubviews {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
-    if ([CleanIdentityPrefs hideAllAvatars] && (CleanGlobalContext((UIView *)self) & 19))
-        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
+    CleanGlobalRefreshReusableCell((UIView *)self, NO);
 }
 - (void)didMoveToWindow {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
-    if ([CleanIdentityPrefs hideAllAvatars] && self.window &&
-        (CleanGlobalContext((UIView *)self) & 19))
-        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
+    CleanGlobalRefreshReusableCell((UIView *)self, YES);
 }
 - (void)prepareForReuse {
     CleanIdentityClearCommentReuseTags((UIView *)self, 0);
     CleanGlobalAvatarWalk((UIView *)self, 0, YES);
+    objc_setAssociatedObject(self, &kCleanCellScanTimeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     %orig;
 }
 %end
@@ -1470,19 +1482,17 @@ static void CleanIdentityClearCommentReuseTags(UIView *view, NSUInteger depth) {
 - (void)layoutSubviews {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
-    if ([CleanIdentityPrefs hideAllAvatars] && (CleanGlobalContext((UIView *)self) & 19))
-        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
+    CleanGlobalRefreshReusableCell((UIView *)self, NO);
 }
 - (void)didMoveToWindow {
     %orig;
     CleanIdentityRefreshCommentRow((UIView *)self);
-    if ([CleanIdentityPrefs hideAllAvatars] && self.window &&
-        (CleanGlobalContext((UIView *)self) & 19))
-        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
+    CleanGlobalRefreshReusableCell((UIView *)self, YES);
 }
 - (void)prepareForReuse {
     CleanIdentityClearCommentReuseTags((UIView *)self, 0);
     CleanGlobalAvatarWalk((UIView *)self, 0, YES);
+    objc_setAssociatedObject(self, &kCleanCellScanTimeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     %orig;
 }
 %end

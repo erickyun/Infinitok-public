@@ -42,11 +42,79 @@ static BOOL CleanGlobalAvatarName(UIView *view) {
         [name hasSuffix:@"node"];
 }
 
+// Search can render avatars using plain image views; constrain the fallback
+// to search UI and compact round portraits, not video covers or general images.
+static BOOL CleanGlobalHasAny(NSString *name, NSArray<NSString *> *terms) {
+    for (NSString *term in terms) if ([name containsString:term]) return YES;
+    return NO;
+}
+static NSString *CleanGlobalClass(id object) {
+    return object ? [NSStringFromClass([object class]) lowercaseString] : @"";
+}
+static NSUInteger CleanGlobalContext(UIView *view) {
+    // search=1, profile=2, user/live row=4, editor=8
+    NSUInteger flags = 0;
+    NSUInteger depth = 0;
+    for (UIResponder *node = view; node && depth++ < 40; node = node.nextResponder) {
+        NSString *name = CleanGlobalClass(node);
+        if (CleanGlobalHasAny(name, @[@"search", @"popularlive", @"trendinglive"])) flags |= 1;
+        if (CleanGlobalHasAny(name, @[@"profileheader", @"profilehead", @"profilebio",
+                  @"profilesignature", @"profileuser", @"profileroot", @"profilehomeviewcontroller",
+                  @"profileotherviewcontroller", @"profilepageviewcontroller", @"userprofileviewcontroller"])) flags |= 2;
+        if (CleanGlobalHasAny(name, @[@"searchuser", @"usersearch", @"searchaccount",
+                  @"userresult", @"accountresult", @"searchlive", @"livesearch",
+                  @"popularlive", @"trendinglive", @"liveuser", @"liveauthor", @"liveanchor"])) flags |= 4;
+        if (CleanGlobalHasAny(name, @[@"profileedit", @"editprofile", @"avatarpicker",
+                  @"searchbar", @"searchinput", @"searchtextfield"])) flags |= 8;
+        if ([node isKindOfClass:[UIWindow class]]) break;
+    }
+    return flags;
+}
+static BOOL CleanGlobalSearchAvatar(UIView *view) {
+    if (![view isKindOfClass:[UIImageView class]] || !view.superview || !view.window) return NO;
+    NSUInteger context = CleanGlobalContext(view);
+    if (!(context & 1) || (context & 8)) return NO;
+    UIImageView *image = (UIImageView *)view;
+    if (!image.image || image.image.renderingMode == UIImageRenderingModeAlwaysTemplate) return NO;
+    CGRect frame = [view convertRect:view.bounds toView:view.window];
+    CGFloat w = CGRectGetWidth(frame), h = CGRectGetHeight(frame);
+    if (w < 10.0 || h < 10.0 || w > 100.0 || h > 100.0 ||
+        fabs(w-h) > MAX(5.0, MIN(w,h)*0.20)) return NO;
+    BOOL round = NO;
+    for (UIView *p = view; p && p != view.window; p = p.superview) {
+        CGFloat pw = CGRectGetWidth(p.bounds), ph = CGRectGetHeight(p.bounds);
+        if (pw > w+20.0 || ph > h+20.0) break;
+        if (p.layer.cornerRadius >= MIN(w,h)*0.30 ||
+            (p.layer.mask && fabs(pw-ph)<12.0)) round = YES;
+    }
+    if (!round) return NO;
+    if (CleanGlobalHasAny(CleanGlobalClass(view), @[@"icon", @"emoji", @"sticker",
+                       @"cover", @"thumbnail", @"badge", @"logo", @"button"])) return NO;
+    return (context & 4) || CGRectGetMinX(frame) < CGRectGetWidth(view.window.bounds)*0.30;
+}
+static BOOL CleanGlobalIdentityText(UIView *view) {
+    if (![view isKindOfClass:[UILabel class]] &&
+        !([view isKindOfClass:[UITextView class]] && !((UITextView *)view).editable)) return NO;
+    NSUInteger context = CleanGlobalContext(view);
+    if (!(context & 3) || (context & 8)) return NO;
+    for (UIView *p = view; p && p != view.window; p = p.superview) {
+        NSString *name = CleanGlobalClass(p);
+        if (CleanGlobalHasAny(name, @[@"username", @"nickname", @"displayname",
+                  @"authorname", @"accountname", @"profilename", @"useridlabel"])) return YES;
+        if ((context & 2) && CleanGlobalHasAny(name, @[@"profilebio", @"profilesignature",
+                  @"profiledescription", @"userbio", @"usersignature", @"bioview",
+                  @"biocomponent", @"signaturecomponent", @"signaturelabel", @"biolabel"])) return YES;
+        if ([p isKindOfClass:[UITableViewCell class]] ||
+            [p isKindOfClass:[UICollectionViewCell class]] || CGRectGetHeight(p.bounds)>170.0) break;
+    }
+    return NO;
+}
+
 static BOOL CleanGlobalAvatarCandidate(UIView *view) {
     if (!view || [view isKindOfClass:[UIWindow class]]) return NO;
     if ([objc_getAssociatedObject(view, &kCleanGlobalAvatarPropertyKey) boolValue] ||
         CleanGlobalAvatarName(view)) return YES;
-    return NO;
+    return CleanGlobalSearchAvatar(view) || CleanGlobalIdentityText(view);
 }
 
 static void CleanGlobalAvatarApply(UIView *view) {
@@ -79,13 +147,44 @@ static void CleanGlobalAvatarDiscover(UIView *owner) {
                  @"headView", @"userHeadView", @"userHeadImageView", @"authorAvatarView",
                  @"authorAvatarImageView", @"smallAvatarView", @"largeAvatarView",
                  @"miniAvatarView", @"avatarBorderView", @"avatarButton", @"avatarContainerView",
-                 @"senderAvatarView", @"receiverAvatarView", @"friendAvatarView", @"coverAvatarView"];
+                 @"senderAvatarView", @"receiverAvatarView", @"friendAvatarView", @"coverAvatarView", @"avatar", @"avatarImage", @"userAvatar",
+                 @"headImage", @"headImageButton", @"avatarIconView", @"avatarContentView",
+                 @"avatarWrapperView", @"smallAvatarImageView", @"miniAvatarImageView",
+                 @"liveAvatarView", @"liveUserAvatarView", @"anchorAvatarView", @"hostAvatarView",
+                 @"portraitView", @"userPortraitView", @"profilePictureView", @"userHeadImage"];
     });
     for (NSString *key in keys) {
         if (![owner respondsToSelector:NSSelectorFromString(key)]) continue;
         UIView *target = CleanIdentityViewForKey(owner, key);
         if (!target || target == owner || ![target isDescendantOfView:owner]) continue;
         if ([target isKindOfClass:[UITableViewCell class]] || [target isKindOfClass:[UICollectionViewCell class]]) continue;
+        objc_setAssociatedObject(target, &kCleanGlobalAvatarPropertyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        CleanGlobalAvatarApply(target);
+    }
+
+    NSUInteger context = CleanGlobalContext(owner);
+    if (!(context & 3) || (context & 8)) return;
+    static NSArray<NSString *> *nameKeys;
+    static NSArray<NSString *> *bioKeys;
+    static dispatch_once_t textOnce;
+    dispatch_once(&textOnce, ^{
+        nameKeys = @[@"nameLabel", @"nicknameLabel", @"nickNameLabel", @"userNameLabel",
+                     @"usernameLabel", @"displayNameLabel", @"authorNameLabel", @"accountNameLabel",
+                     @"profileNameLabel", @"uniqueIdLabel", @"uniqueIDLabel", @"userIdLabel",
+                     @"userIDLabel", @"nickNameView", @"nicknameView", @"userNameView", @"usernameView"];
+        bioKeys = @[@"bioLabel", @"bioTextView", @"bioView", @"signatureLabel", @"signatureTextView",
+                    @"signatureView", @"profileDescriptionLabel", @"profileDescriptionView",
+                    @"userDescriptionLabel", @"userBioLabel"];
+    });
+    NSMutableArray<NSString *> *textKeys = [nameKeys mutableCopy];
+    if (context & 2) [textKeys addObjectsFromArray:bioKeys];
+    for (NSString *key in textKeys) {
+        if (![owner respondsToSelector:NSSelectorFromString(key)]) continue;
+        UIView *target = CleanIdentityViewForKey(owner, key);
+        if (!target || target == owner || ![target isDescendantOfView:owner]) continue;
+        if (![target isKindOfClass:[UILabel class]] &&
+            !([target isKindOfClass:[UITextView class]] && !((UITextView *)target).editable) &&
+            !CleanGlobalIdentityText(target)) continue;
         objc_setAssociatedObject(target, &kCleanGlobalAvatarPropertyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         CleanGlobalAvatarApply(target);
     }

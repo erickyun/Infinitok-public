@@ -288,8 +288,8 @@
 "section.clean_identity" = "Kimlik ve Müzik Gizleme";
 "clean_identity.video_usernames.title" = "Video kullanıcı adlarını gizle";
 "clean_identity.video_usernames.detail" = "Akıştaki video sahibinin adını gizler.";
-"clean_identity.all_avatars.title" = "Tüm profil resimlerini gizle";
-"clean_identity.all_avatars.detail" = "Arama, profiller, gelen kutusu, akış, yorumlar ve üretici beğeni rozetleri dahil tüm boyutlardaki profil resimlerini gizler.";
+"clean_identity.all_avatars.title" = "Tüm avatarları ve profil bilgilerini gizle";
+"clean_identity.all_avatars.detail" = "Arama ve Popüler LIVE dahil tüm profil resimlerini, arama ve profil ekranlarındaki kullanıcı adlarını ve profil açıklamasını gizler.";
 "clean_identity.music_disc.title" = "Müzik simgesini gizle";
 "clean_identity.music_disc.detail" = "Dönen müzik simgesini ve müzik görünümünü gizler.";
 "clean_identity.comment_usernames.title" = "Yorum kullanıcı adlarını gizle";

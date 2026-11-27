@@ -288,8 +288,8 @@
 "section.clean_identity" = "إخفاء الهوية والموسيقى";
 "clean_identity.video_usernames.title" = "إخفاء أسماء مستخدمي الفيديو";
 "clean_identity.video_usernames.detail" = "إخفاء اسم صاحب الفيديو في الخلاصة.";
-"clean_identity.all_avatars.title" = "إخفاء جميع الصور الشخصية";
-"clean_identity.all_avatars.detail" = "إخفاء الصور الشخصية بجميع أحجامها في البحث والملفات الشخصية وصندوق الوارد والخلاصة والتعليقات وشارات إعجاب المنشئ.";
+"clean_identity.all_avatars.title" = "إخفاء الصور الشخصية ومعلومات الملف الشخصي";
+"clean_identity.all_avatars.detail" = "إخفاء جميع الصور الشخصية بما فيها صور البحث والبث المباشر الشائع، وأسماء المستخدمين في البحث والملفات الشخصية، والنبذة الشخصية.";
 "clean_identity.music_disc.title" = "إخفاء قرص الموسيقى";
 "clean_identity.music_disc.detail" = "إخفاء قرص الموسيقى وواجهة الموسيقى.";
 "clean_identity.comment_usernames.title" = "إخفاء أسماء المعلقين";

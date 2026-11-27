@@ -1497,13 +1497,19 @@ static void CleanGlobalRefreshReusableCell(UIView *cell, BOOL force) {
 }
 %end
 
+static char kCleanCommentCollectionScanKey;
 %hook UICollectionView
 - (void)layoutSubviews {
     %orig;
     if (CleanIdentityAnyCommentPrivacyEnabled() &&
         CleanIdentityWithinCommentUI((UIView *)self)) {
-        for (UICollectionViewCell *cell in [self visibleCells])
-            CleanIdentityRefreshCommentRow(cell);
+        CFTimeInterval now = CACurrentMediaTime();
+        NSNumber *last = objc_getAssociatedObject(self, &kCleanCommentCollectionScanKey);
+        if (!last || now-last.doubleValue >= 0.10) {
+            objc_setAssociatedObject(self, &kCleanCommentCollectionScanKey, @(now), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            for (UICollectionViewCell *cell in [self visibleCells])
+                CleanIdentityRefreshCommentRow(cell);
+        }
     }
 }
 %end
@@ -1527,16 +1533,24 @@ static void CleanGlobalRefreshReusableCell(UIView *cell, BOOL force) {
 %hook AWEIMMessageBaseCellView
 - (void)layoutSubviews {
     %orig;
-    if ([CleanIdentityPrefs hideAllAvatars] && self.window)
-        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
+    CleanGlobalRefreshReusableCell((UIView *)self, NO);
 }
 - (void)didMoveToWindow {
     %orig;
-    if ([CleanIdentityPrefs hideAllAvatars] && self.window)
-        CleanGlobalAvatarWalk((UIView *)self, 0, NO);
+    CleanGlobalRefreshReusableCell((UIView *)self, YES);
 }
 %end
 
+// Limit repeated header scans, but always scan on screen appearance.
+static char kCleanHeaderScanTimeKey;
+static void CleanChatRefreshHeader(UIView *root, BOOL force) {
+    if (!root.window) return;
+    CFTimeInterval now = CACurrentMediaTime();
+    NSNumber *last = objc_getAssociatedObject(root, &kCleanHeaderScanTimeKey);
+    if (!force && last && now-last.doubleValue < 0.10) return;
+    objc_setAssociatedObject(root, &kCleanHeaderScanTimeKey, @(now), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    CleanChatMaskHeader(root);
+}
 // Profile headers and other screens whose custom views bypass UIView layout.
 %hook UIViewController
 - (void)viewWillAppear:(BOOL)animated {
@@ -1551,12 +1565,12 @@ static void CleanGlobalRefreshReusableCell(UIView *cell, BOOL force) {
         CleanGlobalAvatarWalk(self.view, 0, NO);
     if ([CleanIdentityPrefs hideAllAvatars] && self.isViewLoaded &&
         CleanGlobalHasAny(CleanGlobalClass(self), @[@"conversationcontroller", @"chatviewcontroller", @"messagelistviewcontroller"]))
-        CleanChatMaskHeader(self.view);
+        CleanChatRefreshHeader(self.view, YES);
 }
 - (void)viewDidLayoutSubviews {
     %orig;
     if ([CleanIdentityPrefs hideAllAvatars] && self.isViewLoaded &&
         CleanGlobalHasAny(CleanGlobalClass(self), @[@"conversationcontroller", @"chatviewcontroller", @"messagelistviewcontroller"]))
-        CleanChatMaskHeader(self.view);
+        CleanChatRefreshHeader(self.view, NO);
 }
 %end

@@ -88,7 +88,23 @@ jobs:
         run: |
           export THEOS="$HOME/theos"
           echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
-          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          installer="$RUNNER_TEMP/install-theos.sh"
+          curl --fail --silent --show-error --location --retry 4 --retry-delay 3 \
+            https://raw.githubusercontent.com/theos/theos/master/bin/install-theos -o "$installer"
+          # The installer tries to fetch the latest SDK via GitHub API.
+          # This workflow explicitly installs the selected SDK in the next steps.
+          status=0
+          bash "$installer" || status=$?
+          if [ "$status" -ne 0 ]; then
+            if [ "$status" -eq 8 ] && [ -f "$THEOS/makefiles/common.mk" ] && \
+               [ -x "$THEOS/toolchain/linux/iphone/bin/clang" ]; then
+              echo "::warning::Automatic SDK download failed; using the explicit Fetch iOS SDK step."
+            else
+              exit "$status"
+            fi
+          fi
+          test -f "$THEOS/makefiles/common.mk"
+          test -x "$THEOS/toolchain/linux/iphone/bin/clang"
       - name: Install roothide Theos
         run: |
           git clone --recursive https://github.com/roothide/theos.git "$HOME/theos-roothide"
@@ -98,14 +114,25 @@ jobs:
         env:
           SDK_VERSION: ${{ inputs.sdk_version }}
         run: |
-          git clone -n --depth=1 --filter=tree:0 https://github.com/theos/sdks/
+          for attempt in 1 2 3; do
+            rm -rf sdks
+            if git clone -n --depth=1 --filter=tree:0 https://github.com/theos/sdks/; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 5
+          done
           cd sdks
           git sparse-checkout set --no-cone "iPhoneOS${SDK_VERSION}.sdk"
           git checkout
+          test -d "iPhoneOS${SDK_VERSION}.sdk/System/Library/Frameworks/UIKit.framework"
+          mkdir -p "$THEOS/sdks" "$HOME/theos-roothide/sdks"
           rm -rf "$THEOS/sdks/iPhoneOS${SDK_VERSION}.sdk"
           cp -R "iPhoneOS${SDK_VERSION}.sdk" "$THEOS/sdks/"
           rm -rf "$HOME/theos-roothide/sdks/iPhoneOS${SDK_VERSION}.sdk"
           mv "iPhoneOS${SDK_VERSION}.sdk" "$HOME/theos-roothide/sdks/"
+          test -d "$THEOS/sdks/iPhoneOS${SDK_VERSION}.sdk/System/Library/Frameworks/UIKit.framework"
+          test -d "$HOME/theos-roothide/sdks/iPhoneOS${SDK_VERSION}.sdk/System/Library/Frameworks/UIKit.framework"
           cd ..
           rm -rf sdks
       - name: Plan which debs to build
